@@ -12,32 +12,45 @@ pthread_t thread_id[MAX_THREADS];
 pthread_mutex_t lock;
 int *total;
 int *disponiveis;
+int args;
 
-void *process(int args)
+void *process()
 {
-  printf("thread created, pid: %lu\n", syscall(SYS_gettid));
+  long unsigned int pid = syscall(SYS_gettid);
+  printf("thread created, pid: %lu\n", pid);
 
   int i;
-  int *requisicoes;
+  int *recursos;
 
-  requisicoes = calloc((args-3), sizeof(int));
+  recursos = calloc((args-3), sizeof(int));
 
   pthread_mutex_lock(&lock);
 
   for(i=0;i<(args-4);i++){
-    requisicoes[i] = (int) rand() % (total[i]+1);
+    recursos[i] = (int) rand() % (total[i]+1);
 
   }
 
   pthread_mutex_unlock(&lock);
 
 
-  free(requisicoes);
-  requisicoes = NULL;
+  free(recursos);
+  recursos = NULL;
 
   return NULL;
 }
 
+int safe_state(int recursos[]){
+  int i, var;
+  int count = 0;
+  for(i=0;i<(args-4);i++){
+    var = disponiveis[i] - recursos[i];
+    if(var >=0 && var <= total[i]){
+      count++;
+    }
+  }
+  if (count == args-3) return 0; else return -1;
+}
 
 int requisicao_recursos(int pid, int recursos[]){
 
@@ -47,11 +60,11 @@ int main(int argc, char *argv[])
 {
 
   int i, n;
-  int *args = argc;
+  args = argc;
   srand(time(NULL));
 
   if(argc < 4){
-      printf("Please add the number of threads to the command line\n");
+      printf("Wrong args\n");
       exit(1); 
   }
 
@@ -82,7 +95,7 @@ int main(int argc, char *argv[])
 
   for(i=0;i<n;i++)
   {
-    if(pthread_create(&thread_id[i], NULL, process, args)) {
+    if(pthread_create(&thread_id[i], NULL, process, NULL)) {
       fprintf(stderr, "Error creating thread\n");
       return 1;
     }
