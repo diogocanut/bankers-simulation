@@ -21,8 +21,9 @@ int main(int argc, char *argv[])
 {
 
   int i, n;
+  int *available;
 
-  if(argc < 3){
+  if(argc < 4){
       printf("Please add the number of threads to the command line\n");
       exit(1); 
   }
@@ -32,9 +33,26 @@ int main(int argc, char *argv[])
     if(n > MAX_THREADS) n = MAX_THREADS;
 
   }
-  else printf("Wrong args\n");
+  else{
 
-  for(i = 0; i < n; i++)
+    printf("Wrong args\n");
+    exit(1);
+  }
+
+  if(!strcmp(argv[3], "-a")){
+    available = malloc((argc-3)*sizeof(int));
+    for(i=0;i<(argc-4);i++){
+      available[i] = atoi(argv[i+4]);
+    }
+  }
+  else{
+
+    printf("Wrong args\n");
+    exit(1);
+  }
+
+
+  for(i=0;i<n;i++)
   {
     if(pthread_create(&thread_id[i], NULL, process, NULL)) {
       fprintf(stderr, "Error creating thread\n");
@@ -48,5 +66,6 @@ int main(int argc, char *argv[])
   }
 
   pthread_exit(NULL);
+  free(available);
   return 0;
 }
