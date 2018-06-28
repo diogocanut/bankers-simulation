@@ -17,21 +17,40 @@ int args;
 void *process()
 {
   long unsigned int pid = syscall(SYS_gettid);
-  printf("thread created, pid: %lu\n", pid);
 
-  int i;
+  int i, var;
   int *recursos;
 
   recursos = calloc((args-3), sizeof(int));
 
-  pthread_mutex_lock(&lock);
+  while(1){
 
-  for(i=0;i<(args-4);i++){
-    recursos[i] = (int) rand() % (total[i]+1);
+    printf("Thread PID %lu requisita: ", pid);
+
+    for(i=0;i<(args-4);i++){
+      recursos[i] = (int) rand() % (total[i]+1);
+      printf("%d ", recursos[i]);
+    }
+    printf("\n\n");
+
+    pthread_mutex_lock(&lock);
+    var = requisicao_recursos(pid, recursos);
+    pthread_mutex_unlock(&lock);
+
+    if(var == 0){
+      sleep(1);
+      pthread_mutex_lock(&lock);
+      libera_recursos(pid, recursos);
+      pthread_mutex_unlock(&lock);
+      sleep(1);
+    }
+    else{
+      printf("Thread PID: %lu não esta em um estado seguro, ABORTING THREAD...\n", pid);
+      break;
+    }
+
 
   }
-
-  pthread_mutex_unlock(&lock);
 
 
   free(recursos);
@@ -49,11 +68,34 @@ int safe_state(int recursos[]){
       count++;
     }
   }
-  if (count == args-3) return 0; else return -1;
+  if (count == i) return 0; else return -1;
 }
 
 int requisicao_recursos(int pid, int recursos[]){
+  int i;
+  if(safe_state(recursos) == 0){
+    printf("Thread PID: %lu requisitou recursos com segurança, DISPONIVEIS:", pid);
+    for(i=0;i<(args-4);i++){
+      disponiveis[i] = disponiveis[i] - recursos[i];   
+      printf("%d ", disponiveis[i]);
+    }
+    printf("\n");
+    return 0;
+  }
+  else{
+    return -1;
+  }
+}
 
+int libera_recursos(int pid, int recursos[]){
+  int i;
+  printf("Thread PID: %lu liberou recursos, DISPONIVEIS:", pid);
+  for(i=0;i<(args-4);i++){
+    disponiveis[i] = disponiveis[i] + recursos[i];   
+    printf("%d ", disponiveis[i]);
+  }
+  printf("\n");
+  return 0;
 }
 
 int main(int argc, char *argv[])
