@@ -10,48 +10,47 @@
 
 pthread_t thread_id[MAX_THREADS];
 pthread_mutex_t lock;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+
+int done = 0;
+
 int *total;
 int *disponiveis;
 int args;
 
-void *process()
+void *process(void* tpid)
 {
-  long unsigned int pid = syscall(SYS_gettid);
+  const int pid = (long) tpid;
 
-  int i, var;
+  int i, var, nextpid = pid;
   int *recursos;
 
   recursos = calloc((args-3), sizeof(int));
 
   while(1){
-
-    printf("Thread PID %lu requisita: ", pid);
-
+    pthread_mutex_lock(&lock);
+    printf("Thread PID %d requisita: ", pid);
     for(i=0;i<(args-4);i++){
       recursos[i] = (int) rand() % (total[i]+1);
       printf("%d ", recursos[i]);
     }
-    printf("\n\n");
-
-    pthread_mutex_lock(&lock);
-    var = requisicao_recursos(pid, recursos);
+    printf("\n");
     pthread_mutex_unlock(&lock);
 
+    var = requisicao_recursos(pid, recursos);
     if(var == 0){
-      sleep(1);
-      pthread_mutex_lock(&lock);
+      sleep(3);
       libera_recursos(pid, recursos);
-      pthread_mutex_unlock(&lock);
-      sleep(1);
+      sleep(3);
     }
     else{
-      printf("Thread PID: %lu não esta em um estado seguro, ABORTING THREAD...\n", pid);
+      printf("Thread PID: %d não esta em um estado seguro, ABORTING THREAD...\n", pid);
+      done ++;
       break;
+
     }
 
-
   }
-
 
   free(recursos);
   recursos = NULL;
@@ -74,12 +73,14 @@ int safe_state(int recursos[]){
 int requisicao_recursos(int pid, int recursos[]){
   int i;
   if(safe_state(recursos) == 0){
-    printf("Thread PID: %lu requisitou recursos com segurança, DISPONIVEIS:", pid);
+    pthread_mutex_lock(&lock);
+    printf("Thread PID: %d requisitou recursos com segurança, DISPONIVEIS:", pid);
     for(i=0;i<(args-4);i++){
       disponiveis[i] = disponiveis[i] - recursos[i];   
       printf("%d ", disponiveis[i]);
     }
     printf("\n");
+    pthread_mutex_unlock(&lock);
     return 0;
   }
   else{
@@ -89,11 +90,13 @@ int requisicao_recursos(int pid, int recursos[]){
 
 int libera_recursos(int pid, int recursos[]){
   int i;
-  printf("Thread PID: %lu liberou recursos, DISPONIVEIS:", pid);
+  printf("Thread PID: %d liberou recursos, DISPONIVEIS:", pid);
+  pthread_mutex_lock(&lock);
   for(i=0;i<(args-4);i++){
     disponiveis[i] = disponiveis[i] + recursos[i];   
     printf("%d ", disponiveis[i]);
   }
+  pthread_mutex_unlock(&lock);
   printf("\n");
   return 0;
 }
@@ -137,18 +140,23 @@ int main(int argc, char *argv[])
 
   for(i=0;i<n;i++)
   {
-    if(pthread_create(&thread_id[i], NULL, process, NULL)) {
+    if(pthread_create(&thread_id[i], NULL, process, (void*)(long)i)) {
       fprintf(stderr, "Error creating thread\n");
       return 1;
     }
 
-    if(pthread_join(thread_id[i], NULL)) {
-      fprintf(stderr, "Error joining thread\n");
-      return 2;
-    }
   }
 
-  pthread_exit(NULL);
+  pthread_mutex_lock(&lock);
+
+  while(done<args-4 ){
+      pthread_cond_wait(&cond,&lock);
+      break;
+    }
+
+  pthread_mutex_unlock(&lock);
+
+
   free(total);
   total=NULL;
   free(disponiveis);
